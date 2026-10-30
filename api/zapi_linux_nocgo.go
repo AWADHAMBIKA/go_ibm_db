@@ -128,6 +128,9 @@ func bind(lib uintptr) (err error) {
 	reg(&fnSQLRowCount, "SQLRowCount")
 	reg(&fnSQLSetEnvAttr, "SQLSetEnvAttr")
 	reg(&fnSQLSetConnectAttrW, "SQLSetConnectAttrW")
+	// The *Ptr variables bind the same C symbols with a pointer-typed value
+	// argument. They are independent function values, so there is no "last one
+	// wins"; they exist because the value is either an integer or a pointer.
 	reg(&fnSQLSetEnvAttrPtr, "SQLSetEnvAttr")
 	reg(&fnSQLSetConnAttrWPtr, "SQLSetConnectAttrW")
 	reg(&fnSQLColAttribute, "SQLColAttribute")

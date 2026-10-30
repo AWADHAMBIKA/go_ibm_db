@@ -62,3 +62,33 @@ jobs:
            cd ../../testdata
            echo "============TEST CASES ======"
            go test -v
+
+  nocgo-install:
+    name: no-cgo install (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest]
+    env:
+      CGO_ENABLED: "0"
+      # arm64 Linux has no downloadable CLI driver, so only the missing-driver path runs there.
+      IBM_DB_E2E_DOWNLOAD: ${{ matrix.os != 'ubuntu-24.04-arm' && '1' || '0' }}
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24.5'
+
+    - name: Provision CLI driver with the installer
+      if: matrix.os != 'ubuntu-24.04-arm'
+      run: go run ./installer
+
+    - name: Verify CLI driver
+      if: matrix.os != 'ubuntu-24.04-arm'
+      run: go run ./installer -verify
+
+    - name: Loader, installer and first-connection download tests
+      run: go test -count=1 -v ./api ./internal/... .
