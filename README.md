@@ -32,60 +32,34 @@ yum install go git tar libpam
 
 ## How to Install in Windows
 
-- You may install go_ibm_db using either of below commands
+On Windows (amd64 and 386) no C compiler or `PATH` / `LIB` / `CGO_*` settings are needed. The driver loads the Db2 CLI DLL (`db2cli64.dll`, or `db2cli.dll` on 32-bit) by absolute path at run time and builds with `CGO_ENABLED=0`. Windows on ARM64 has no published CLI driver; set `IBM_DB_HOME` to an existing one.
 
 ```
-go install github.com/ibmdb/go_ibm_db/installer@latest
-go install github.com/ibmdb/go_ibm_db/installer@v0.5.4
+go get github.com/ibmdb/go_ibm_db
+go run .
 ```
 
-- You can optionally specify a specific cli driver by setting the IBM_DB_DOWNLOAD_URL environment variable
-  to the full path of your desired cli driver. For example, if you want to install the 64-bit macos v11.5.4
-  cli driver instead of the latest one, set the variable as below:
+Here `go run .` runs your own application (a `main` package that imports `_ "github.com/ibmdb/go_ibm_db"` and calls `sql.Open("go_ibm_db", dsn)`), for example the code in "How to run sample program" below.
 
-```
-export IBM_DB_DOWNLOAD_URL=https://public.dhe.ibm.com/ibmdl/export/pub/software/data/db2/drivers/odbc_cli/v11.5.4/macos64_odbc_cli.tar.gz
-```
+- On the first connection the driver downloads the matching CLI driver (HTTPS only; SHA-256 verified when `IBM_DB_DOWNLOAD_SHA256` is set) into `%USERPROFILE%\.ibm_db\clidriver`.
+- If `IBM_DB_HOME` points to a valid CLI driver (a directory containing `bin\db2cli64.dll`), it is used and nothing is downloaded. A CLI driver found on `PATH` is also used, but it is still loaded by absolute path.
+- To provision ahead of time (CI, air-gapped build stages): `go run github.com/ibmdb/go_ibm_db/installer@latest`. It works from any directory and never writes to the Go module cache.
+- To check what the driver will use: `go run github.com/ibmdb/go_ibm_db/installer@latest -verify`.
+- Example of using an existing CLI driver: `set IBM_DB_HOME=C:\clidriver`.
 
-- You can instruct go_ibm_db driver to download specific version of clidriver by setting environment variable `CLIDRIVER_DOWNLOAD_VERSION=<version>` before running `setup.go` file. f.e. `export CLIDRIVER_DOWNLOAD_VERSION=v12.1.2`
+The environment variables are the same as on Linux:
 
-- If you already have a dsdriver/db2client/db2server or clidriver with include directory available in your system, add the path of the same to your
-  PATH windows environment variable.
-  Example:
+| Variable | Purpose |
+|---|---|
+| `IBM_DB_HOME` | Use an existing CLI driver; disables downloading |
+| `IBM_DB_AUTO_DOWNLOAD=0` | Never download automatically |
+| `IBM_DB_DOWNLOAD_URL` | HTTPS URL of a CLI driver `.zip` archive; HTTPS only |
+| `IBM_DB_DOWNLOAD_SHA256` | Optional: verify the archive against this SHA-256 |
+| `CLIDRIVER_DOWNLOAD_VERSION` | Pin a CLI driver version, e.g. `set CLIDRIVER_DOWNLOAD_VERSION=v12.1.2` |
 
-```
-set PATH="C:\Program Files\IBM\IBM DATA SERVER DRIVER\bin";%PATH%
-set LIB="C:\Program Files\IBM\IBM DATA SERVER DRIVER\lib";%LIB%
-```
+If the DLL cannot be found or loaded, the error lists every searched path and the command to fix it; the next connection attempt retries. `IBM_DB_INSTALLER_URL` and `DB2HOME` are deprecated aliases of `IBM_DB_DOWNLOAD_URL` and `IBM_DB_HOME`. `installer\setenvwin.bat [path]` is an optional helper that sets `IBM_DB_HOME` and adds `bin` to `PATH` for the current prompt (for example to run `db2cli.exe`).
 
-- Note that the `clidriver` or Runtime Client (RTCL) downloaded from IBM Fix Central do not have `include` directory and do not work with `go_ibm_db` driver. Download `IBM Data Sever Driver Package` or `IBM Data Server Client` (CLNT) from fix central and install.
-
-- If you do not have a clidriver in your system, go to installer folder where `go_ibm_db`
-  is downloaded in your system, use below command:
-  (Example: C:\Users\uname\go\src\github.com\ibmdb\go_ibm_db\installer
-  or C:\Users\uname\go\pkg\mod\github.com\ibmdb\go_ibm_db\installer
-  where uname is the username ) and run setup.go file (`go run setup.go`).
-  setup.go file will automatically download clidriver from IBM hosted site under parent directory of go_ibm_db.
-
-- If you have a clidriver in your system, use below commands
-
-```
-Set IBM_DB_HOME to clidriver downloaded path and
-set this path to your PATH windows environment variable
-(Example: Path=C:\Users\uname\go\src\github.com\ibmdb\clidriver)
-set IBM_DB_HOME=C:\Users\uname\go\src\github.com\ibmdb\clidriver
-set PATH=%IBM_DB_HOME%\bin;%PATH%
-set LIB=%IBM_DB_HOME%\lib;%LIB%
-set CGO_CFLAGS=%IBM_DB_HOME%\include
-set CGO_LDFLAGS=%IBM_DB_HOME%\bin
-```
-
-- Script file to set environment variable
-
-```
-cd .../go_ibm_db/installer
-setenvwin.bat
-```
+- Note that the `clidriver` or Runtime Client (RTCL) from IBM Fix Central can be used as well; no `include` directory is needed.
 
 ## How to Install in Linux
 

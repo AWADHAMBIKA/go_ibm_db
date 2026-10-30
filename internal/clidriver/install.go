@@ -21,8 +21,17 @@ const (
 	fallbackURL = "https://github.com/ibmdb/db2drivers/raw/main/clidriver/"
 )
 
-// ArchiveName returns the CLI driver archive for a Linux architecture.
+// ArchiveName returns the CLI driver archive for a Linux or Windows architecture.
 func ArchiveName(goos, goarch string) (string, error) {
+	if goos == "windows" {
+		switch goarch {
+		case "amd64":
+			return "ntx64_odbc_cli.zip", nil
+		case "386":
+			return "nt32_odbc_cli.zip", nil
+		}
+		return "", fmt.Errorf("no CLI driver archive is published for %s/%s", goos, goarch)
+	}
 	if goos != "linux" {
 		return "", fmt.Errorf("automatic CLI driver download is not implemented for %s/%s", goos, goarch)
 	}
@@ -168,7 +177,7 @@ func installFrom(ctx context.Context, client *http.Client, src downloadSource, d
 	}
 	defer os.RemoveAll(work)
 
-	archivePath := filepath.Join(work, "archive.tar.gz")
+	archivePath := filepath.Join(work, "archive")
 	var lastErr error
 	for _, u := range src.urls {
 		Warn("downloading %s to %s", u, dest)
@@ -180,13 +189,8 @@ func installFrom(ctx context.Context, client *http.Client, src downloadSource, d
 		return lastErr
 	}
 
-	f, err := os.Open(archivePath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
 	extracted := filepath.Join(work, "x")
-	if err := ExtractTarGz(f, extracted); err != nil {
+	if err := extractArchive(archivePath, extracted); err != nil {
 		return err
 	}
 

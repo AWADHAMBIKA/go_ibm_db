@@ -1,7 +1,6 @@
 package main
 
 import (
-	"archive/zip"
 	"bufio"
 	"context"
 	"flag"
@@ -59,40 +58,6 @@ func downloadFile(url string, filename string) error {
 	}
 
 	return nil
-}
-
-func Unzipping(sourcefile string, targetDirectory string) {
-	reader, err := zip.OpenReader("./../../" + sourcefile)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	defer reader.Close()
-	for _, f := range reader.Reader.File {
-		zipped, err := f.Open()
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-		defer zipped.Close()
-		path := filepath.Join(targetDirectory, f.Name)
-		if f.FileInfo().IsDir() {
-			os.MkdirAll(path, f.Mode())
-			fmt.Println("Creating directory", path)
-		} else {
-			writer, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, f.Mode())
-			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
-			}
-			defer writer.Close()
-			if _, err = io.Copy(writer, zipped); err != nil {
-				fmt.Println(err)
-				os.Exit(1)
-			}
-			fmt.Println("Unzipping : ", path)
-		}
-	}
 }
 
 func linux_untar(clidriver string, targetDirectory string, ibmdbDir string) error {
@@ -191,10 +156,10 @@ func checkIncludeDir(clidriver string) bool {
 	return false
 }
 
-// runLinux provisions the CLI driver into ~/.ibm_db/clidriver (or -dir) using
+// runInstall provisions the CLI driver into ~/.ibm_db/clidriver (or -dir) using
 // only the Go standard library. It returns the process exit code. It lives in
 // this file so that `go run setup.go` keeps working.
-func runLinux(args []string, out io.Writer) int {
+func runInstall(args []string, out io.Writer) int {
 	fs := flag.NewFlagSet("installer", flag.ContinueOnError)
 	fs.SetOutput(out)
 	verify := fs.Bool("verify", false, "report the resolved CLI driver without downloading")
@@ -206,7 +171,7 @@ func runLinux(args []string, out io.Writer) int {
 	fmt.Fprintf(out, "os = %s, processor = %s\n", runtime.GOOS, runtime.GOARCH)
 
 	if *verify {
-		return verifyLinux(out)
+		return verifyInstall(out)
 	}
 
 	r := clidriver.Resolve()
@@ -242,7 +207,7 @@ func mustDefault() string {
 	return d
 }
 
-func verifyLinux(out io.Writer) int {
+func verifyInstall(out io.Writer) int {
 	r := clidriver.Resolve()
 	if r.Lib == "" {
 		fmt.Fprintln(out, clidriver.NotFoundError(r, nil))
@@ -262,8 +227,8 @@ func verifyLinux(out io.Writer) int {
 }
 
 func main() {
-	if runtime.GOOS == "linux" {
-		os.Exit(runLinux(os.Args[1:], os.Stdout))
+	if runtime.GOOS == "linux" || runtime.GOOS == "windows" {
+		os.Exit(runInstall(os.Args[1:], os.Stdout))
 	}
 
 	var target, ibmdbDir, cliFileName, existingDriver string
@@ -284,9 +249,7 @@ func main() {
 		ibmDBHome, found := os.LookupEnv("IBM_DB_HOME")
 		if !found || ibmDBHome == "" || !dirExists(ibmDBHome) {
 			// IBM_DB_HOME is not set
-			if runtime.GOOS == "windows" {
-				fmt.Println("Please set IBM_DB_HOME and add %IBM_DB_HOME%/bin to PATH and %IBM_DB_HOME%/lib to LIB environment variables after clidriver installation")
-			} else if runtime.GOOS == "aix" {
+			if runtime.GOOS == "aix" {
 				fmt.Println("Please set IBM_DB_HOME, CGO_CFLAGS, CGO_LDFLAGS and LIBPATH environment variables after clidriver installation")
 			} else if runtime.GOOS == "darwin" {
 				fmt.Println("Please set IBM_DB_HOME, CGO_CFLAGS, CGO_LDFLAGS and DYLD_LIBRARY_PATH environment variables after clidriver installation")
@@ -346,15 +309,7 @@ func main() {
 		}
 	}
 
-	if runtime.GOOS == "windows" {
-		unpackageType = 1
-		const wordsize = 32 << (^uint(0) >> 32 & 1)
-		if wordsize == 64 {
-			cliFileName = "ntx64_odbc_cli.zip"
-		} else {
-			cliFileName = "nt32_odbc_cli.zip"
-		}
-	} else if runtime.GOOS == "linux" {
+	if runtime.GOOS == "linux" {
 		unpackageType = 2
 		if runtime.GOARCH == "ppc64le" {
 			const wordsize = 32 << (^uint(0) >> 32 & 1)
@@ -446,9 +401,7 @@ func main() {
 	}
 	fmt.Println("Download completed.")
 
-	if unpackageType == 1 {
-		Unzipping(cliFileName, target)
-	} else if unpackageType == 3 {
+	if unpackageType == 3 {
 		aix_untar(cliFileName, target)
 	} else {
 		linux_untar(cliFileName, target, ibmdbDir)

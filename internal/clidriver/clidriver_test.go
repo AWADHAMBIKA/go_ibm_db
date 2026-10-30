@@ -2,6 +2,7 @@ package clidriver
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -11,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -88,6 +90,9 @@ func TestExtractValidArchive(t *testing.T) {
 		{name: "clidriver/lib/libdb2.so", typ: tar.TypeSymlink, link: "libdb2.so.1"},
 	})
 	if err := ExtractTarGz(bytes.NewReader(data), dest); err != nil {
+		if runtime.GOOS == "windows" && strings.Contains(err.Error(), "required privilege") {
+			t.Skip("creating symlinks requires privileges on this Windows machine")
+		}
 		t.Fatal(err)
 	}
 	got, err := os.ReadFile(filepath.Join(dest, "clidriver", "lib", "libdb2.so"))
@@ -171,6 +176,7 @@ func TestResolveHomeTakesPrecedence(t *testing.T) {
 	}
 	t.Setenv(EnvHome, home)
 	t.Setenv("HOME", t.TempDir())
+	t.Setenv("USERPROFILE", t.TempDir())
 
 	r := Resolve()
 	if r.Lib != libPath || r.Home != home {
@@ -181,6 +187,7 @@ func TestResolveHomeTakesPrecedence(t *testing.T) {
 func TestResolveDefaultDirAndNotFound(t *testing.T) {
 	fakeHome := t.TempDir()
 	t.Setenv("HOME", fakeHome)
+	t.Setenv("USERPROFILE", fakeHome)
 	t.Setenv(EnvHome, "")
 	t.Setenv(EnvLegacyHome, "")
 
@@ -203,6 +210,7 @@ func TestResolveDefaultDirAndNotFound(t *testing.T) {
 
 func TestEnsureHonoursAutoDownloadOff(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
+	t.Setenv("USERPROFILE", t.TempDir())
 	t.Setenv(EnvHome, "")
 	t.Setenv(EnvLegacyHome, "")
 	t.Setenv(EnvAutoDownload, "0")
@@ -245,5 +253,74 @@ func TestArchiveName(t *testing.T) {
 	}
 	if _, err := ArchiveName("linux", "riscv64"); err == nil {
 		t.Error("unsupported arch should error")
+	}
+}
+
+func TestArchiveNameWindows(t *testing.T) {
+	for arch, want := range map[string]string{
+		"amd64": "ntx64_odbc_cli.zip",
+		"386":   "nt32_odbc_cli.zip",
+	} {
+		got, err := ArchiveName("windows", arch)
+		if err != nil || got != want {
+			t.Errorf("%s: got %q, %v", arch, got, err)
+		}
+	}
+	if _, err := ArchiveName("windows", "arm64"); err == nil {
+		t.Error("windows/arm64 should error")
+	}
+}
+
+func TestLibNameWindows(t *testing.T) {
+	if got := libNameFor("windows", "amd64"); got != "db2cli64.dll" {
+		t.Errorf("amd64: %s", got)
+	}
+	if got := libNameFor("windows", "386"); got != "db2cli.dll" {
+		t.Errorf("386: %s", got)
+	}
+}
+
+func makeZip(t *testing.T, entries []entry) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for _, e := range entries {
+		w, err := zw.Create(e.name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w.Write([]byte(e.body))
+	}
+	zw.Close()
+	return buf.Bytes()
+}
+
+func TestExtractZipRejectsUnsafePaths(t *testing.T) {
+	for name, e := range map[string]entry{
+		"parent traversal": {name: "../evil.txt", body: "x"},
+		"nested traversal": {name: "a/../../evil.txt", body: "x"},
+		"absolute":         {name: "/evil.txt", body: "x"},
+		"backslash root":   {name: `\evil.txt`, body: "x"},
+	} {
+		data := makeZip(t, []entry{e})
+		dest := filepath.Join(t.TempDir(), "x")
+		if err := ExtractZip(bytes.NewReader(data), int64(len(data)), dest); err == nil {
+			t.Errorf("%s: expected error", name)
+		}
+	}
+}
+
+func TestInstallFromZip(t *testing.T) {
+	archive := makeZip(t, []entry{
+		{name: "clidriver/lib/" + LibName(), body: "lib"},
+		{name: "clidriver/bin/" + LibName(), body: "lib"},
+	})
+	srv, client := tlsServer(t, archive)
+	dest := filepath.Join(t.TempDir(), ".ibm_db", "clidriver")
+	if err := installFrom(context.Background(), client, downloadSource{urls: []string{srv.URL}, sha256: sum(archive)}, dest); err != nil {
+		t.Fatal(err)
+	}
+	if !Valid(dest) {
+		t.Fatal("installed directory is not a valid CLI driver")
 	}
 }

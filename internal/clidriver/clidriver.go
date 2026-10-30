@@ -36,10 +36,17 @@ func DefaultDir() (string, error) {
 
 // LibName returns the CLI library file name for the current platform.
 func LibName() string {
-	switch runtime.GOOS {
+	return libNameFor(runtime.GOOS, runtime.GOARCH)
+}
+
+func libNameFor(goos, goarch string) string {
+	switch goos {
 	case "darwin":
 		return "libdb2.dylib"
 	case "windows":
+		if goarch == "386" {
+			return "db2cli.dll"
+		}
 		return "db2cli64.dll"
 	default:
 		return "libdb2.so"

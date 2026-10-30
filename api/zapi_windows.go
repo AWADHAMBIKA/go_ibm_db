@@ -5,7 +5,6 @@ package api
 
 import (
 	"fmt"
-	"os"
 	"syscall"
 	"unsafe"
 
@@ -13,8 +12,6 @@ import (
 )
 
 var (
-	mododbc32 = syscall.NewLazyDLL(GetDllName())
-
 	procSQLAllocHandle     = mododbc32.NewProc("SQLAllocHandle")
 	procSQLBindCol         = mododbc32.NewProc("SQLBindCol")
 	procSQLBindParameter   = mododbc32.NewProc("SQLBindParameter")
@@ -49,20 +46,13 @@ var (
 	procSQLDropDb          = mododbc32.NewProc("SQLDropDbW")
 )
 
-func GetDllName() string {
-	trc.Trace1("api/zapi_windows.go GetDllName()")
-	if winArch := os.Getenv("PROCESSOR_ARCHITECTURE"); winArch == "x86" {
-		trc.Trace1("winArch is x86 and db2cli.dll")
-		return "db2cli.dll"
-	} else {
-		trc.Trace1("db2cli64.dll")
-		return "db2cli64.dll"
-	}
-}
-
 func SQLAllocHandle(handleType SQLSMALLINT, inputHandle SQLHANDLE, outputHandle *SQLHANDLE) (ret SQLRETURN) {
 	trc.Trace1("api/zapi_windows.go SQLAllocHandle() - ENTRY")
 	trc.Trace1(fmt.Sprintf("handleType=%d", handleType))
+
+	if !ensureLoaded() {
+		return SQL_INVALID_HANDLE
+	}
 
 	r0, _, _ := syscall.Syscall(procSQLAllocHandle.Addr(), 3, uintptr(handleType), uintptr(inputHandle), uintptr(unsafe.Pointer(outputHandle)))
 	ret = SQLRETURN(r0)

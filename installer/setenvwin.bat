@@ -1,14 +1,18 @@
-:: Script file to set environment variables to use db2cli executable from 
-:: clidriver/bin folder
-:: This script is only for Windows platform.
+:: Optional helper: points the current command prompt at an existing Db2 CLI driver
+:: and puts its bin folder on PATH so db2cli.exe can be run.
+:: It is NOT required for go_ibm_db. By default the driver downloads the CLI driver
+:: to %USERPROFILE%\.ibm_db\clidriver on first connection and loads it by absolute
+:: path. PATH, LIB and CGO_* settings are not needed on Windows.
+::
+:: Usage: setenvwin.bat [path-to-clidriver]
+:: Without an argument it uses %USERPROFILE%\.ibm_db\clidriver.
 
-
-echo off
-cd ../../clidriver
-set clidrvpath=%cd%
-set IBM_DB_HOME=%clidrvpath%
-set PATH=%IBM_DB_HOME%\bin;%PATH%
-set LIB=%IBM_DB_HOME%\lib;%LIB%
-set CGO_CFLAGS=%IBM_DB_HOME%\include
-set CGO_LDFLAGS=%IBM_DB_HOME%\lib
+@echo off
+if "%~1"=="" (
+    set "IBM_DB_HOME=%USERPROFILE%\.ibm_db\clidriver"
+) else (
+    set "IBM_DB_HOME=%~f1"
+)
+set "PATH=%IBM_DB_HOME%\bin;%PATH%"
+echo IBM_DB_HOME=%IBM_DB_HOME%
 

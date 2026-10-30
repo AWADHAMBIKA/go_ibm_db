@@ -212,49 +212,28 @@ source setenv.sh
 Download the [Go Windows binary/installer](https://golang.org/dl) or [Go Latest binaries](https://go.dev/dl/) and
 install it.
 
-### 4.2 Install go_ibm_db
+### 4.2 Install go_ibm_db (Windows amd64 and 386: two steps, no C compiler)
 
-Following are the steps to install [*go_ibm_db*](https://github.com/ibmdb/go_ibm_db) from github.
-using directory `/goapp` for example.
+On Windows the driver loads the Db2 CLI DLL (`db2cli64.dll`, or `db2cli.dll` on 32-bit) at run time by absolute path, so GCC, `PATH`, `LIB`, `CGO_CFLAGS` and `CGO_LDFLAGS` are not needed and `CGO_ENABLED=0` works.
 
-#### 4.2.1 Direct Installation.
 ```
-1. mkdir goapp
-2. cd gopapp
-3. go install github.com/ibmdb/go_ibm_db/installer@latest
-   or
-   go install github.com/ibmdb/go_ibm_db/installer@v0.5.2
-4. go env GOPATH
-5. cd %GOPATH%\pkg\mod\github.com\ibmdb\go_ibm_db@v0.5.2\installer
-6. go run setup.go
-7.
-    set IBM_DB_HOME=%GOPATH%\pkg\mod\github.com\ibmdb\clidriver
-    set CGO_CFLAGS=-I%IBM_DB_HOME%\include
-    set CGO_LDFLAGS=-L%IBM_DB_HOME%\lib
-    set LIB=%IBM_DB_HOME%\lib;%LIB%
+1. go get github.com/ibmdb/go_ibm_db
+2. go run .
 ```
 
-#### 4.2.2 Manual Installation by using git clone.
-```
-1. mkdir %HOME%\goapp
-2. cd goapp
-3. git clone https://github.com/ibmdb/go_ibm_db/
-4. go env GOPATH
-5. cd go_ibm_db\installer
-6. go run setup.go
-7.
-    set IBM_DB_HOME=%HOME%\goapp\clidriver
-    set CGO_CFLAGS=-I%IBM_DB_HOME%\include
-    set CGO_LDFLAGS=-L%IBM_DB_HOME%\lib
-    set LIB=%IBM_DB_HOME%\lib;%LIB%
-```
+`go run .` runs your own application: a `main` package that imports `_ "github.com/ibmdb/go_ibm_db"` and calls `sql.Open("go_ibm_db", dsn)`.
 
-### 4.3 Script file
-```
-cd .../go_ibm_db/installer
-Run setenvwin.bat
-```
-It's Done.
+* On the first connection the driver looks for the CLI driver in `IBM_DB_HOME`, then in `%USERPROFILE%\.ibm_db\clidriver`, then on `PATH`; if none has it, it downloads it (HTTPS) into `%USERPROFILE%\.ibm_db\clidriver`.
+* To provision ahead of time (CI, air-gapped build stages): `go run github.com/ibmdb/go_ibm_db/installer@latest`. Use `-verify` to see which CLI driver will be used and `-dir <path>` to choose the target directory.
+* Windows on ARM64 has no published CLI driver; set `IBM_DB_HOME` to an existing one.
+* To use an existing CLI driver, for example `set IBM_DB_HOME=C:\clidriver`. Runtime Client (RTCL) packages work too because no `include` directory is needed.
+* Environment variables: `IBM_DB_HOME` (use an existing CLI driver), `IBM_DB_AUTO_DOWNLOAD=0` (never download), `IBM_DB_DOWNLOAD_URL` (HTTPS `.zip` URL), `IBM_DB_DOWNLOAD_SHA256` (optional checksum), `CLIDRIVER_DOWNLOAD_VERSION` (pin a version). `IBM_DB_INSTALLER_URL` and `DB2HOME` are deprecated aliases.
+* If the DLL is not found, the error lists every searched path and how to fix it.
+
+### 4.3 Optional helper script
+
+`installer\setenvwin.bat [path-to-clidriver]` sets `IBM_DB_HOME` and adds its `bin` folder to `PATH` for the current prompt, for example to run `db2cli.exe`. It is not needed to build or run go_ibm_db.
+
 
 4. Download platform specific clidriver from https://public.dhe.ibm.com/ibmdl/export/pub/software/data/db2/drivers/odbc_cli/ , untar/unzip it and set `IBM_DB_HOME` environmental variable to full path of extracted 'clidriver' directory, for example if clidriver is extracted as: `/home/mysystem/clidriver`, then set system level environment variable `IBM_DB_HOME=/home/mysystem/clidriver`.
 
