@@ -3,6 +3,8 @@ package main
 import (
 	"archive/zip"
 	"bufio"
+	"context"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,6 +13,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/ibmdb/go_ibm_db/internal/clidriver"
 )
 
 const (
@@ -187,7 +191,81 @@ func checkIncludeDir(clidriver string) bool {
 	return false
 }
 
+// runLinux provisions the CLI driver into ~/.ibm_db/clidriver (or -dir) using
+// only the Go standard library. It returns the process exit code. It lives in
+// this file so that `go run setup.go` keeps working.
+func runLinux(args []string, out io.Writer) int {
+	fs := flag.NewFlagSet("installer", flag.ContinueOnError)
+	fs.SetOutput(out)
+	verify := fs.Bool("verify", false, "report the resolved CLI driver without downloading")
+	dir := fs.String("dir", "", "install directory (default ~/.ibm_db/clidriver)")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	fmt.Fprintf(out, "os = %s, processor = %s\n", runtime.GOOS, runtime.GOARCH)
+
+	if *verify {
+		return verifyLinux(out)
+	}
+
+	r := clidriver.Resolve()
+	if r.Lib != "" && *dir == "" {
+		fmt.Fprintf(out, "Db2 CLI driver already available at %s. Skipping download.\n", r.Home)
+		return 0
+	}
+
+	dest := *dir
+	if dest == "" {
+		d, err := clidriver.DefaultDir()
+		if err != nil {
+			fmt.Fprintln(out, "Error:", err)
+			return 1
+		}
+		dest = d
+	}
+	dest, _ = filepath.Abs(dest)
+
+	if err := clidriver.Install(context.Background(), dest); err != nil {
+		fmt.Fprintln(out, clidriver.NotFoundError(r, err))
+		return 4
+	}
+	fmt.Fprintf(out, "Installed Db2 CLI driver to %s\n", dest)
+	if dest != mustDefault() {
+		fmt.Fprintf(out, "Set IBM_DB_HOME=%s so the driver can find it.\n", dest)
+	}
+	return 0
+}
+
+func mustDefault() string {
+	d, _ := clidriver.DefaultDir()
+	return d
+}
+
+func verifyLinux(out io.Writer) int {
+	r := clidriver.Resolve()
+	if r.Lib == "" {
+		fmt.Fprintln(out, clidriver.NotFoundError(r, nil))
+		return 1
+	}
+	fmt.Fprintf(out, "CLI driver home : %s\n", r.Home)
+	fmt.Fprintf(out, "Library         : %s\n", r.Lib)
+	if lic, _ := filepath.Glob(filepath.Join(r.Home, "license", "db2con*.lic")); len(lic) > 0 {
+		fmt.Fprintf(out, "Db2 Connect licence: %s\n", lic[0])
+	} else {
+		fmt.Fprintln(out, "Db2 Connect licence: not found (required only for z/OS and iSeries servers)")
+	}
+	if v, err := os.ReadFile(filepath.Join(r.Home, "properties", "version")); err == nil {
+		fmt.Fprintf(out, "Version file    : %s", v)
+	}
+	return 0
+}
+
 func main() {
+	if runtime.GOOS == "linux" {
+		os.Exit(runLinux(os.Args[1:], os.Stdout))
+	}
+
 	var target, ibmdbDir, cliFileName, existingDriver string
 	var unpackageType int
 	var err11 error

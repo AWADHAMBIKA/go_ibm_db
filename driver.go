@@ -7,8 +7,8 @@ package go_ibm_db
 
 import (
 	"database/sql"
-	"fmt"
 	"os"
+	"sync"
 
 	"github.com/ibmdb/go_ibm_db/api"
 	trc "github.com/ibmdb/go_ibm_db/log2"
@@ -29,21 +29,38 @@ func initDriver() error {
 	in := api.SQLHANDLE(api.SQL_NULL_HANDLE)
 	ret := api.SQLAllocHandle(api.SQL_HANDLE_ENV, in, &out)
 	if IsError(ret) {
+		if err := api.LoadError(); err != nil {
+			return err
+		}
 		return NewError("SQLAllocHandle", api.SQLHENV(in))
 	}
-	drv.h = api.SQLHENV(out)
+	h := api.SQLHENV(out)
 	drv.Stats.updateHandleCount(api.SQL_HANDLE_ENV, 1)
 
 	// will use ODBC v3
-	ret = api.SQLSetEnvUIntPtrAttr(drv.h, api.SQL_ATTR_ODBC_VERSION,
+	ret = api.SQLSetEnvUIntPtrAttr(h, api.SQL_ATTR_ODBC_VERSION,
 		api.SQL_OV_ODBC3, 0)
 	if IsError(ret) {
-		defer releaseHandle(drv.h)
-		return NewError("SQLSetEnvAttr ODBC v3", drv.h)
+		defer releaseHandle(h)
+		return NewError("SQLSetEnvAttr ODBC v3", h)
 	}
+	drv.h = h
 
 	trc.Trace1("driver.go:InitDriver() - EXIT")
 	return nil
+}
+
+var drvInitMu sync.Mutex
+
+// ensureInit allocates the environment handle on first use so that the Db2 CLI
+// driver is located (and provisioned if needed) on the first connection, not at import.
+func (d *Driver) ensureInit() error {
+	drvInitMu.Lock()
+	defer drvInitMu.Unlock()
+	if d.h != api.SQLHENV(api.SQL_NULL_HENV) {
+		return nil
+	}
+	return initDriver()
 }
 
 func (d *Driver) Close() error {
@@ -62,17 +79,6 @@ func init() {
 
 	trc.Trace1("driver.go:init() - ENTRY")
 
-	// Recover from panic to avoid stop an application when can't get the db2 cli
-	defer func() {
-		if err := recover(); err != nil {
-			fmt.Printf("%s\nThe go_ibm_db driver cannot be registered\n", err)
-		}
-	}()
-
-	err := initDriver()
-	if err != nil {
-		panic(err)
-	}
 	//go's to databse/sql/sql.go 43 line
 	sql.Register("go_ibm_db", &drv)
 

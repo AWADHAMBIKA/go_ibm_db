@@ -59,6 +59,10 @@ func (d *Driver) Open(dsn string) (driver.Conn, error) {
 
 	cleanDSN, fetchSize := parseDSN(dsn)
 
+	if err := d.ensureInit(); err != nil {
+		return nil, err
+	}
+
 	var out api.SQLHANDLE
 	ret := api.SQLAllocHandle(api.SQL_HANDLE_DBC, api.SQLHANDLE(d.h), &out)
 	if IsError(ret) {

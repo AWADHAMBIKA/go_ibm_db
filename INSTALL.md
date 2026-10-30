@@ -52,6 +52,7 @@ This go_ibm_db driver has been tested on 64-bit/32-bit IBM Linux, MacOS and Wind
     export IBM_DB_DOWNLOAD_URL=https://public.dhe.ibm.com/ibmdl/export/pub/software/data/db2/drivers/odbc_cli/v11.5.9/linuxx64_odbc_cli.tar.gz
     go run setup.go
 ```
+(On Linux use `go run github.com/ibmdb/go_ibm_db/installer@latest` instead of `go run setup.go`.)
 
 ## <a name="inslnx"></a> 2. Go_ibm_db Installation on Linux.
 
@@ -75,7 +76,27 @@ Set PATH to include Go:
 export PATH=/mygo/go/bin:$PATH
 ```
 
-### 2.2 Install go_ibm_db
+### 2.2 Install go_ibm_db (Linux amd64 and arm64: two steps, no C compiler)
+
+On Linux amd64 and arm64 the driver loads the Db2 CLI library at run time, so GCC, `CGO_CFLAGS`, `CGO_LDFLAGS` and `LD_LIBRARY_PATH` are not needed and `CGO_ENABLED=0` works.
+
+```
+1. go get github.com/ibmdb/go_ibm_db
+2. go run .
+```
+
+`go run .` runs your own application: a `main` package that imports `_ "github.com/ibmdb/go_ibm_db"` and calls `sql.Open("go_ibm_db", dsn)`.
+
+* On the first connection the driver looks for the CLI driver in `IBM_DB_HOME`, then in `~/.ibm_db/clidriver`; if neither has it, it downloads it (HTTPS, amd64 only) into `~/.ibm_db/clidriver`.
+* To provision ahead of time (containers, CI, air-gapped build stages): `go run github.com/ibmdb/go_ibm_db/installer@latest`. Use `-verify` to see which CLI driver will be used and `-dir <path>` to choose the target directory.
+* On arm64 there is no automatic download; set `IBM_DB_HOME` to an existing CLI driver.
+* Environment variables: `IBM_DB_HOME` (use an existing CLI driver), `IBM_DB_AUTO_DOWNLOAD=0` (never download), `IBM_DB_DOWNLOAD_URL` (HTTPS archive URL), `IBM_DB_DOWNLOAD_SHA256` (optional checksum), `CLIDRIVER_DOWNLOAD_VERSION` (pin a version). `IBM_DB_INSTALLER_URL` and `DB2HOME` are deprecated aliases.
+* If the library is not found, the error lists every searched path and how to fix it.
+* The CLI driver needs a recent glibc (2.34 or newer for current releases).
+
+Linux on ppc64le and s390x, and builds using `-tags db2cgo`, still use cgo and the manual steps below.
+
+#### Manual steps (cgo builds: ppc64le, s390x, `-tags db2cgo`)
 
 Following are the steps to install [*go_ibm_db*](https://github.com/ibmdb/go_ibm_db) from github.
 using directory `/goapp` for example.

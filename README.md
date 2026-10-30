@@ -12,7 +12,7 @@ Interface for GoLang to `DB2 for z/OS`, `DB2 for LUW` and `DB2 for i` database s
 
 - Git should be installed in your system.
 
-- For non-windows users, GCC and tar should be present in your system.
+- For macOS, AIX and cgo builds, GCC and tar should be present in your system. Linux amd64/arm64 does not need them.
 
 - For Docker Linux Container(Ex: Amazon Linux2), use below commands:
 
@@ -87,7 +87,35 @@ cd .../go_ibm_db/installer
 setenvwin.bat
 ```
 
-## How to Install in Linux/Mac
+## How to Install in Linux
+
+On Linux (amd64 and arm64) no C compiler, `tar` or `CGO_*` / `LD_LIBRARY_PATH` settings are needed. The driver loads the Db2 CLI library at run time and builds with `CGO_ENABLED=0`. Automatic download is available for amd64; on arm64 set `IBM_DB_HOME` to an existing CLI driver.
+
+```
+go get github.com/ibmdb/go_ibm_db
+go run .
+```
+
+Here `go run .` runs your own application (a `main` package that imports `_ "github.com/ibmdb/go_ibm_db"` and calls `sql.Open("go_ibm_db", dsn)`), for example the code in "How to run sample program" below.
+
+- On the first connection the driver downloads the matching CLI driver (HTTPS only; SHA-256 verified when `IBM_DB_DOWNLOAD_SHA256` is set) into `~/.ibm_db/clidriver`.
+- If `IBM_DB_HOME` points to a valid CLI driver (a directory containing `lib/libdb2.so`), it is used and nothing is downloaded.
+- To provision ahead of time (containers, CI, air-gapped build stages): `go run github.com/ibmdb/go_ibm_db/installer@latest`. It works from any directory and never writes to the Go module cache.
+- To check what the driver will use: `go run github.com/ibmdb/go_ibm_db/installer@latest -verify`.
+
+| Variable | Purpose |
+|---|---|
+| `IBM_DB_HOME` | Use an existing CLI driver; disables downloading |
+| `IBM_DB_AUTO_DOWNLOAD=0` | Never download automatically |
+| `IBM_DB_DOWNLOAD_URL` | HTTPS URL of a CLI driver archive; HTTPS only |
+| `IBM_DB_DOWNLOAD_SHA256` | Optional: verify the archive against this SHA-256 |
+| `CLIDRIVER_DOWNLOAD_VERSION` | Pin a CLI driver version |
+
+If the library cannot be found or loaded, the error lists every searched path and the command to fix it; the next connection attempt retries, so you can fix the problem without restarting your program. `IBM_DB_INSTALLER_URL` and `DB2HOME` are deprecated aliases of `IBM_DB_DOWNLOAD_URL` and `IBM_DB_HOME`.
+
+Linux on ppc64le and s390x, and builds using `-tags db2cgo`, still use cgo and the manual steps below (GCC, `CGO_CFLAGS`, `CGO_LDFLAGS`, `LD_LIBRARY_PATH`). Their archives can still be downloaded with the installer.
+
+## How to Install in Mac (and Linux with cgo)
 
 - You may install go_ibm_db using either of below commands
 

@@ -70,6 +70,10 @@ type (
 //sys	SQLSetEnvAttr(environmentHandle SQLHENV, attribute SQLINTEGER, valuePtr SQLPOINTER, stringLength SQLINTEGER) (ret SQLRETURN) = odbc32.SQLSetEnvAttr
 //sys	SQLSetConnectAttr(connectionHandle SQLHDBC, attribute SQLINTEGER, valuePtr SQLPOINTER, stringLength SQLINTEGER) (ret SQLRETURN) = odbc32.SQLSetConnectAttrW
 
+// LoadError reports why the Db2 CLI library could not be loaded, or nil.
+// Only runtime-loaded platforms (Linux without cgo) ever return an error.
+var LoadError = func() error { return nil }
+
 // UTF16ToString returns the UTF-8 encoding of the UTF-16 sequence s,
 // with a terminating NUL removed.
 func UTF16ToString(s []uint16) string {

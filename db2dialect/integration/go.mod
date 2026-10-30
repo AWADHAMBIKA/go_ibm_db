@@ -9,6 +9,7 @@ require (
 )
 
 require (
+	github.com/ebitengine/purego v0.8.4 // indirect
 	github.com/ibmruntimes/go-recordio/v2 v2.0.0-20240416213906-ae0ad556db70 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/puzpuzpuz/xsync/v3 v3.5.1 // indirect

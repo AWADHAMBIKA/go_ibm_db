@@ -2,9 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build (aix || darwin || linux) && cgo
-// +build aix darwin linux
-// +build cgo
+//go:build cgo && (aix || darwin || (linux && (db2cgo || !(amd64 || arm64))))
 
 package api
 

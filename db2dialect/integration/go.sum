@@ -1,5 +1,7 @@
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/ebitengine/purego v0.8.4 h1:CF7LEKg5FFOsASUj0+QwaXf8Ht6TlFxg09+S9wz0omw=
+github.com/ebitengine/purego v0.8.4/go.mod h1:iIjxzd6CiRiOG0UyXP+V1+jWqUXVjPKLAI0mRfJZTmQ=
 github.com/ibmruntimes/go-recordio/v2 v2.0.0-20240416213906-ae0ad556db70 h1:muF5XqVkHnMdbMDXusPdKtuT8qWzefBgSuLH1JVHcC4=
 github.com/ibmruntimes/go-recordio/v2 v2.0.0-20240416213906-ae0ad556db70/go.mod h1:NSpUK0x9IyEoM1EjTp2/S8ErxZfRHoA2DfwiYobFSkc=
 github.com/jinzhu/inflection v1.0.0 h1:K317FqzuhWc8YvSVlFMCCUb36O/S9MCKRDI7QkRKD/E=
