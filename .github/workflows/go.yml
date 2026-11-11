@@ -69,7 +69,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest]
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-15]
     env:
       CGO_ENABLED: "0"
       # arm64 Linux has no downloadable CLI driver, so only the missing-driver path runs there.

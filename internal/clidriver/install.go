@@ -21,8 +21,17 @@ const (
 	fallbackURL = "https://github.com/ibmdb/db2drivers/raw/main/clidriver/"
 )
 
-// ArchiveName returns the CLI driver archive for a Linux or Windows architecture.
+// ArchiveName returns the CLI driver archive for a supported architecture.
 func ArchiveName(goos, goarch string) (string, error) {
+	if goos == "darwin" {
+		switch goarch {
+		case "amd64":
+			return "macos64_odbc_cli.tar.gz", nil
+		case "arm64":
+			return "macarm64_odbc_cli.tar.gz", nil
+		}
+		return "", fmt.Errorf("no CLI driver archive is published for %s/%s", goos, goarch)
+	}
 	if goos == "windows" {
 		switch goarch {
 		case "amd64":
@@ -53,6 +62,10 @@ type downloadSource struct {
 }
 
 func resolveSource(archive string) (downloadSource, error) {
+	return resolveSourceFor(runtime.GOOS, runtime.GOARCH, archive)
+}
+
+func resolveSourceFor(goos, goarch, archive string) (downloadSource, error) {
 	var src downloadSource
 	custom := os.Getenv(EnvDownloadURL)
 	if custom == "" {
@@ -63,6 +76,26 @@ func resolveSource(archive string) (downloadSource, error) {
 	}
 	version := os.Getenv(EnvDownloadVersion)
 	override := strings.ToLower(strings.TrimSpace(os.Getenv(EnvDownloadSHA256)))
+	if goos == "darwin" {
+		var defaultVersion, defaultHash string
+		switch goarch {
+		case "amd64":
+			defaultVersion = "v11.5.9"
+			defaultHash = "8422b3ec74564ab737fc7a3caf173ab378d4654d1f2093bfca7db0a93ce154d8"
+		case "arm64":
+			defaultVersion = "v12.1.4"
+			defaultHash = "188adacc6a6efd2381f5315bac16b42f0c719ea8c2fce0a1f7a8950e68f84011"
+		}
+		if custom == "" && version == "" {
+			version = defaultVersion
+		}
+		if custom == "" && version == defaultVersion && override == "" {
+			override = defaultHash
+		}
+		if override == "" {
+			return src, fmt.Errorf("%s is required for custom macOS CLI archives or versions", EnvDownloadSHA256)
+		}
+	}
 
 	switch {
 	case custom != "":
@@ -78,7 +111,6 @@ func resolveSource(archive string) (downloadSource, error) {
 		}
 	}
 
-	// The checksum is optional: it is verified only when IBM_DB_DOWNLOAD_SHA256 is set.
 	src.sha256 = override
 	return src, nil
 }
@@ -154,6 +186,16 @@ func Download(ctx context.Context, client *http.Client, rawURL, wantSHA256, dst 
 
 // Install downloads the CLI driver for the current platform into dest.
 func Install(ctx context.Context, dest string) error {
+	return install(ctx, dest, false)
+}
+
+// Reinstall downloads the CLI driver and replaces dest only after the new copy
+// is verified and extracted; a failed download leaves dest untouched.
+func Reinstall(ctx context.Context, dest string) error {
+	return install(ctx, dest, true)
+}
+
+func install(ctx context.Context, dest string, replace bool) error {
 	archive, err := ArchiveName(runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		return err
@@ -162,10 +204,10 @@ func Install(ctx context.Context, dest string) error {
 	if err != nil {
 		return err
 	}
-	return installFrom(ctx, newHTTPClient(), src, dest)
+	return installFrom(ctx, newHTTPClient(), src, dest, replace)
 }
 
-func installFrom(ctx context.Context, client *http.Client, src downloadSource, dest string) error {
+func installFrom(ctx context.Context, client *http.Client, src downloadSource, dest string, replace bool) error {
 	dest = filepath.Clean(dest)
 	parent := filepath.Dir(dest)
 	if err := os.MkdirAll(parent, 0o755); err != nil {
@@ -200,6 +242,9 @@ func installFrom(ctx context.Context, client *http.Client, src downloadSource, d
 		return fmt.Errorf("archive does not contain %s", filepath.Join("clidriver", "lib", LibName()))
 	}
 
+	if replace {
+		return swapDir(root, dest, filepath.Join(work, "previous"))
+	}
 	if Valid(dest) {
 		return nil // another process finished first
 	}
@@ -209,6 +254,26 @@ func installFrom(ctx context.Context, client *http.Client, src downloadSource, d
 	if err := os.Rename(root, dest); err != nil {
 		if Valid(dest) {
 			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+// swapDir moves root to dest, keeping any existing dest in backup until the move succeeds.
+func swapDir(root, dest, backup string) error {
+	hadOld := false
+	if _, err := os.Lstat(dest); err == nil {
+		if err := os.Rename(dest, backup); err != nil {
+			return fmt.Errorf("cannot replace %s (is it in use?): %w", dest, err)
+		}
+		hadOld = true
+	}
+	if err := os.Rename(root, dest); err != nil {
+		if hadOld {
+			if rerr := os.Rename(backup, dest); rerr != nil {
+				return fmt.Errorf("replacing %s: %w; restoring the previous install also failed: %v", dest, err, rerr)
+			}
 		}
 		return err
 	}

@@ -18,6 +18,7 @@ const (
 	EnvLegacyURL       = "IBM_DB_INSTALLER_URL"
 	EnvDownloadSHA256  = "IBM_DB_DOWNLOAD_SHA256"
 	EnvDownloadVersion = "CLIDRIVER_DOWNLOAD_VERSION"
+	EnvForceDownload   = "DOWNLOAD_CLIDRIVER"
 )
 
 // Warn receives deprecation and progress messages. Tests may replace it.
@@ -94,6 +95,12 @@ func AutoDownloadEnabled() bool {
 		return false
 	}
 	return true
+}
+
+// ForceDownload reports whether DOWNLOAD_CLIDRIVER=true asks the installer to
+// download again; like Node.js ibm_db, it is honoured at install time only.
+func ForceDownload() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv(EnvForceDownload)), "true")
 }
 
 // Resolution is the outcome of a library lookup.

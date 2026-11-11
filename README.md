@@ -12,7 +12,7 @@ Interface for GoLang to `DB2 for z/OS`, `DB2 for LUW` and `DB2 for i` database s
 
 - Git should be installed in your system.
 
-- For macOS, AIX and cgo builds, GCC and tar should be present in your system. Linux amd64/arm64 does not need them.
+- AIX and cgo builds require a C compiler and the Db2 CLI headers. Linux amd64/arm64 and macOS arm64 do not. The published macOS Intel CLI additionally requires GCC runtime libraries.
 
 - For Docker Linux Container(Ex: Amazon Linux2), use below commands:
 
@@ -56,6 +56,7 @@ The environment variables are the same as on Linux:
 | `IBM_DB_DOWNLOAD_URL` | HTTPS URL of a CLI driver `.zip` archive; HTTPS only |
 | `IBM_DB_DOWNLOAD_SHA256` | Optional: verify the archive against this SHA-256 |
 | `CLIDRIVER_DOWNLOAD_VERSION` | Pin a CLI driver version, e.g. `set CLIDRIVER_DOWNLOAD_VERSION=v12.1.2` |
+| `DOWNLOAD_CLIDRIVER=true` | Installer only: download again into `%USERPROFILE%\.ibm_db\clidriver` (or `-dir`), even if a CLI driver exists |
 
 If the DLL cannot be found or loaded, the error lists every searched path and the command to fix it; the next connection attempt retries. `IBM_DB_INSTALLER_URL` and `DB2HOME` are deprecated aliases of `IBM_DB_DOWNLOAD_URL` and `IBM_DB_HOME`. `installer\setenvwin.bat [path]` is an optional helper that sets `IBM_DB_HOME` and adds `bin` to `PATH` for the current prompt (for example to run `db2cli.exe`).
 
@@ -84,12 +85,28 @@ Here `go run .` runs your own application (a `main` package that imports `_ "git
 | `IBM_DB_DOWNLOAD_URL` | HTTPS URL of a CLI driver archive; HTTPS only |
 | `IBM_DB_DOWNLOAD_SHA256` | Optional: verify the archive against this SHA-256 |
 | `CLIDRIVER_DOWNLOAD_VERSION` | Pin a CLI driver version |
+| `DOWNLOAD_CLIDRIVER=true` | Installer only: download again into `~/.ibm_db/clidriver` (or `-dir`), even if a CLI driver exists |
 
 If the library cannot be found or loaded, the error lists every searched path and the command to fix it; the next connection attempt retries, so you can fix the problem without restarting your program. `IBM_DB_INSTALLER_URL` and `DB2HOME` are deprecated aliases of `IBM_DB_DOWNLOAD_URL` and `IBM_DB_HOME`.
 
 Linux on ppc64le and s390x, and builds using `-tags db2cgo`, still use cgo and the manual steps below (GCC, `CGO_CFLAGS`, `CGO_LDFLAGS`, `LD_LIBRARY_PATH`). Their archives can still be downloaded with the installer.
 
-## How to Install in Mac (and Linux with cgo)
+## How to Install in macOS
+
+On Apple Silicon, no C compiler, Xcode command-line tools, `CGO_*` settings or `DYLD_LIBRARY_PATH` are required. The driver builds with `CGO_ENABLED=0` and loads the Db2 CLI library at run time.
+
+```sh
+go get github.com/ibmdb/go_ibm_db
+go run .
+```
+
+`go run .` runs your own application that imports the driver and opens a connection. On first connection, the driver downloads the CLI driver to `~/.ibm_db/clidriver`, unless `IBM_DB_HOME` selects an existing installation. The default macOS archives are pinned and SHA-256 verified. To use a custom URL or a different version, set `IBM_DB_DOWNLOAD_SHA256` to the archive's trusted SHA-256 digest. `IBM_DB_AUTO_DOWNLOAD=0` disables downloads.
+
+To provision ahead of time, run `go run github.com/ibmdb/go_ibm_db/installer@latest`; use `-verify` to report the resolved library. See [INSTALL.md](INSTALL.md) for options.
+
+**Intel macOS:** The published v11.5.9 CLI dylib depends on Intel GCC 8 runtime libraries at `/usr/local/lib/gcc/8/`. They are not bundled in the archive, so a clean-machine two-step installation is not currently guaranteed. A compatible CLI installation can be selected with `IBM_DB_HOME`. Intel runtime validation on a native Intel Mac is still required.
+
+## Linux With cgo
 
 - You may install go_ibm_db using either of below commands
 

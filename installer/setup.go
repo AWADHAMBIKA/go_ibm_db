@@ -175,7 +175,8 @@ func runInstall(args []string, out io.Writer) int {
 	}
 
 	r := clidriver.Resolve()
-	if r.Lib != "" && *dir == "" {
+	force := clidriver.ForceDownload()
+	if r.Lib != "" && *dir == "" && !force {
 		fmt.Fprintf(out, "Db2 CLI driver already available at %s. Skipping download.\n", r.Home)
 		return 0
 	}
@@ -191,7 +192,11 @@ func runInstall(args []string, out io.Writer) int {
 	}
 	dest, _ = filepath.Abs(dest)
 
-	if err := clidriver.Install(context.Background(), dest); err != nil {
+	install := clidriver.Install
+	if force {
+		install = clidriver.Reinstall
+	}
+	if err := install(context.Background(), dest); err != nil {
 		fmt.Fprintln(out, clidriver.NotFoundError(r, err))
 		return 4
 	}
@@ -227,7 +232,7 @@ func verifyInstall(out io.Writer) int {
 }
 
 func main() {
-	if runtime.GOOS == "linux" || runtime.GOOS == "windows" {
+	if runtime.GOOS == "linux" || runtime.GOOS == "windows" || (runtime.GOOS == "darwin" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64")) {
 		os.Exit(runInstall(os.Args[1:], os.Stdout))
 	}
 
@@ -252,7 +257,7 @@ func main() {
 			if runtime.GOOS == "aix" {
 				fmt.Println("Please set IBM_DB_HOME, CGO_CFLAGS, CGO_LDFLAGS and LIBPATH environment variables after clidriver installation")
 			} else if runtime.GOOS == "darwin" {
-				fmt.Println("Please set IBM_DB_HOME, CGO_CFLAGS, CGO_LDFLAGS and DYLD_LIBRARY_PATH environment variables after clidriver installation")
+				fmt.Println("Please set IBM_DB_HOME environment variable after clidriver installation")
 			} else {
 				fmt.Println("Please set IBM_DB_HOME, CGO_CFLAGS, CGO_LDFLAGS and LD_LIBRARY_PATH environment variables after clidriver installation")
 			}

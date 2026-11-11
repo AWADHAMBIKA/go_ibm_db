@@ -1,10 +1,12 @@
-//go:build linux && (amd64 || arm64) && !db2cgo
+//go:build (linux || darwin) && (amd64 || arm64) && !db2cgo
 
 package api
 
 import (
 	"context"
 	"fmt"
+	"runtime"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -95,6 +97,9 @@ func loadLibrary() error {
 	}
 	lib, err := purego.Dlopen(r.Lib, purego.RTLD_NOW|purego.RTLD_GLOBAL)
 	if err != nil {
+		if runtime.GOOS == "darwin" && runtime.GOARCH == "amd64" && (strings.Contains(err.Error(), "libgcc") || strings.Contains(err.Error(), "libstdc++")) {
+			return fmt.Errorf("loading %s failed: %w\nThe Intel Db2 CLI requires compatible GCC runtime libraries, including /usr/local/lib/gcc/8/libstdc++.6.dylib and libgcc_s.1.dylib; install the required Intel runtimes or use a compatible CLI installation via %s", r.Lib, err, clidriver.EnvHome)
+		}
 		return fmt.Errorf("loading %s failed: %w\nSet %s to a valid Db2 CLI driver directory or remove %s", r.Lib, err, clidriver.EnvHome, r.Home)
 	}
 	return bind(lib)
@@ -145,7 +150,7 @@ func bind(lib uintptr) (err error) {
 func ret16(r int) SQLRETURN { return SQLRETURN(int16(r)) }
 
 func SQLAllocHandle(handleType SQLSMALLINT, inputHandle SQLHANDLE, outputHandle *SQLHANDLE) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLAllocHandle() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLAllocHandle() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -155,7 +160,7 @@ func SQLAllocHandle(handleType SQLSMALLINT, inputHandle SQLHANDLE, outputHandle 
 }
 
 func SQLBindCol(statementHandle SQLHSTMT, columnNumber SQLUSMALLINT, targetType SQLSMALLINT, targetValuePtr []byte, bufferLength SQLLEN, vallen *SQLLEN) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLBindCol() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLBindCol() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -165,7 +170,7 @@ func SQLBindCol(statementHandle SQLHSTMT, columnNumber SQLUSMALLINT, targetType 
 }
 
 func SQLBindParameter(statementHandle SQLHSTMT, parameterNumber SQLUSMALLINT, inputOutputType SQLSMALLINT, valueType SQLSMALLINT, parameterType SQLSMALLINT, columnSize SQLULEN, decimalDigits SQLSMALLINT, parameterValue SQLPOINTER, bufferLength SQLLEN, ind *SQLLEN) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLBindParameter() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLBindParameter() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -175,7 +180,7 @@ func SQLBindParameter(statementHandle SQLHSTMT, parameterNumber SQLUSMALLINT, in
 }
 
 func SQLCloseCursor(statementHandle SQLHSTMT) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLCloseCursor() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLCloseCursor() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -183,7 +188,7 @@ func SQLCloseCursor(statementHandle SQLHSTMT) (ret SQLRETURN) {
 }
 
 func SQLDescribeCol(statementHandle SQLHSTMT, columnNumber SQLUSMALLINT, columnName *SQLWCHAR, bufferLength SQLSMALLINT, nameLengthPtr *SQLSMALLINT, dataTypePtr *SQLSMALLINT, columnSizePtr *SQLULEN, decimalDigitsPtr *SQLSMALLINT, nullablePtr *SQLSMALLINT) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLDescribeCol() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLDescribeCol() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -191,7 +196,7 @@ func SQLDescribeCol(statementHandle SQLHSTMT, columnNumber SQLUSMALLINT, columnN
 }
 
 func SQLDescribeParam(statementHandle SQLHSTMT, parameterNumber SQLUSMALLINT, dataTypePtr *SQLSMALLINT, parameterSizePtr *SQLULEN, decimalDigitsPtr *SQLSMALLINT, nullablePtr *SQLSMALLINT) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLDescribeParam() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLDescribeParam() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -199,7 +204,7 @@ func SQLDescribeParam(statementHandle SQLHSTMT, parameterNumber SQLUSMALLINT, da
 }
 
 func SQLDisconnect(connectionHandle SQLHDBC) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLDisconnect() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLDisconnect() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -207,7 +212,7 @@ func SQLDisconnect(connectionHandle SQLHDBC) (ret SQLRETURN) {
 }
 
 func SQLDriverConnect(connectionHandle SQLHDBC, windowHandle SQLHWND, inConnectionString *SQLWCHAR, stringLength1 SQLSMALLINT, outConnectionString *SQLWCHAR, bufferLength SQLSMALLINT, stringLength2Ptr *SQLSMALLINT, driverCompletion SQLUSMALLINT) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLDriverConnect() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLDriverConnect() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -215,7 +220,7 @@ func SQLDriverConnect(connectionHandle SQLHDBC, windowHandle SQLHWND, inConnecti
 }
 
 func SQLEndTran(handleType SQLSMALLINT, handle SQLHANDLE, completionType SQLSMALLINT) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLEndTran() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLEndTran() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -223,7 +228,7 @@ func SQLEndTran(handleType SQLSMALLINT, handle SQLHANDLE, completionType SQLSMAL
 }
 
 func SQLExecute(statementHandle SQLHSTMT) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLExecute() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLExecute() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -231,7 +236,7 @@ func SQLExecute(statementHandle SQLHSTMT) (ret SQLRETURN) {
 }
 
 func SQLFetch(statementHandle SQLHSTMT) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLFetch() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLFetch() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -239,7 +244,7 @@ func SQLFetch(statementHandle SQLHSTMT) (ret SQLRETURN) {
 }
 
 func SQLFreeHandle(handleType SQLSMALLINT, handle SQLHANDLE) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLFreeHandle() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLFreeHandle() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -247,7 +252,7 @@ func SQLFreeHandle(handleType SQLSMALLINT, handle SQLHANDLE) (ret SQLRETURN) {
 }
 
 func SQLGetData(statementHandle SQLHSTMT, colOrParamNum SQLUSMALLINT, targetType SQLSMALLINT, targetValuePtr SQLPOINTER, bufferLength SQLLEN, vallen *SQLLEN) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLGetData() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLGetData() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -255,7 +260,7 @@ func SQLGetData(statementHandle SQLHSTMT, colOrParamNum SQLUSMALLINT, targetType
 }
 
 func SQLGetDiagRec(handleType SQLSMALLINT, handle SQLHANDLE, recNumber SQLSMALLINT, sqlState *SQLWCHAR, nativeErrorPtr *SQLINTEGER, messageText *SQLWCHAR, bufferLength SQLSMALLINT, textLengthPtr *SQLSMALLINT) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLGetDiagRec() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLGetDiagRec() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -263,7 +268,7 @@ func SQLGetDiagRec(handleType SQLSMALLINT, handle SQLHANDLE, recNumber SQLSMALLI
 }
 
 func SQLGetInfo(connectionHandle SQLHDBC, infoType SQLUSMALLINT, infoValuePtr SQLPOINTER, bufferLength SQLSMALLINT, stringLengthPtr *SQLSMALLINT) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLGetInfo() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLGetInfo() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -271,7 +276,7 @@ func SQLGetInfo(connectionHandle SQLHDBC, infoType SQLUSMALLINT, infoValuePtr SQ
 }
 
 func SQLNumParams(statementHandle SQLHSTMT, parameterCountPtr *SQLSMALLINT) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLNumParams() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLNumParams() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -279,7 +284,7 @@ func SQLNumParams(statementHandle SQLHSTMT, parameterCountPtr *SQLSMALLINT) (ret
 }
 
 func SQLNumResultCols(statementHandle SQLHSTMT, columnCountPtr *SQLSMALLINT) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLNumResultCols() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLNumResultCols() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -287,7 +292,7 @@ func SQLNumResultCols(statementHandle SQLHSTMT, columnCountPtr *SQLSMALLINT) (re
 }
 
 func SQLPrepare(statementHandle SQLHSTMT, statementText *SQLWCHAR, textLength SQLINTEGER) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLPrepare() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLPrepare() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -295,7 +300,7 @@ func SQLPrepare(statementHandle SQLHSTMT, statementText *SQLWCHAR, textLength SQ
 }
 
 func SQLRowCount(statementHandle SQLHSTMT, rowCountPtr *SQLLEN) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLRowCount() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLRowCount() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -303,7 +308,7 @@ func SQLRowCount(statementHandle SQLHSTMT, rowCountPtr *SQLLEN) (ret SQLRETURN) 
 }
 
 func SQLSetEnvAttr(environmentHandle SQLHENV, attribute SQLINTEGER, valuePtr SQLPOINTER, stringLength SQLINTEGER) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLSetEnvAttr() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLSetEnvAttr() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -311,7 +316,7 @@ func SQLSetEnvAttr(environmentHandle SQLHENV, attribute SQLINTEGER, valuePtr SQL
 }
 
 func SQLSetConnectAttr(connectionHandle SQLHDBC, attribute SQLINTEGER, valuePtr SQLPOINTER, stringLength SQLINTEGER) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLSetConnectAttr() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLSetConnectAttr() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -319,7 +324,7 @@ func SQLSetConnectAttr(connectionHandle SQLHDBC, attribute SQLINTEGER, valuePtr 
 }
 
 func SQLColAttribute(statementHandle SQLHSTMT, ColumnNumber SQLUSMALLINT, FieldIdentifier SQLUSMALLINT, CharacterAttributePtr SQLPOINTER, BufferLength SQLSMALLINT, StringLengthPtr *SQLSMALLINT, NumericAttributePtr SQLPOINTER) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLColAttribute() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLColAttribute() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -327,7 +332,7 @@ func SQLColAttribute(statementHandle SQLHSTMT, ColumnNumber SQLUSMALLINT, FieldI
 }
 
 func SQLMoreResults(statementHandle SQLHSTMT) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLMoreResults() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLMoreResults() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -335,7 +340,7 @@ func SQLMoreResults(statementHandle SQLHSTMT) (ret SQLRETURN) {
 }
 
 func SQLSetStmtAttr(statementHandle SQLHSTMT, attribute SQLINTEGER, valuePtr SQLPOINTER, stringLength SQLINTEGER) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLSetStmtAttr() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLSetStmtAttr() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -343,7 +348,7 @@ func SQLSetStmtAttr(statementHandle SQLHSTMT, attribute SQLINTEGER, valuePtr SQL
 }
 
 func SQLCreateDb(connectionHandle SQLHDBC, dbnamePtr *SQLWCHAR, dbnameLen SQLINTEGER, codeSetPtr *SQLWCHAR, codeSetLen SQLINTEGER, modePtr *SQLWCHAR, modeLen SQLINTEGER) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLCreateDb() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLCreateDb() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -351,7 +356,7 @@ func SQLCreateDb(connectionHandle SQLHDBC, dbnamePtr *SQLWCHAR, dbnameLen SQLINT
 }
 
 func SQLDropDb(connectionHandle SQLHDBC, dbnamePtr *SQLWCHAR, dbnameLen SQLINTEGER) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLDropDb() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLDropDb() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}
@@ -359,7 +364,7 @@ func SQLDropDb(connectionHandle SQLHDBC, dbnamePtr *SQLWCHAR, dbnameLen SQLINTEG
 }
 
 func SQLExecDirect(statementHandle SQLHSTMT, statementText *SQLWCHAR, textLength SQLINTEGER) (ret SQLRETURN) {
-	trc.Trace1("api/zapi_linux_nocgo.go SQLExecDirect() - ENTRY")
+	trc.Trace1("api/zapi_purego.go SQLExecDirect() - ENTRY")
 	if !ensureLoaded() {
 		return SQL_INVALID_HANDLE
 	}

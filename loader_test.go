@@ -1,4 +1,4 @@
-//go:build windows || (linux && (amd64 || arm64) && !db2cgo)
+//go:build windows || ((linux || darwin) && (amd64 || arm64) && !db2cgo)
 
 package go_ibm_db
 

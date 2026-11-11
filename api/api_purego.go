@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-//go:build linux && (amd64 || arm64) && !db2cgo
+//go:build (linux || darwin) && (amd64 || arm64) && !db2cgo
 
 package api
 
@@ -186,7 +186,7 @@ type (
 )
 
 func SQLSetEnvUIntPtrAttr(environmentHandle SQLHENV, attribute SQLINTEGER, valuePtr uintptr, stringLength SQLINTEGER) (ret SQLRETURN) {
-	trc.Trace1("api/api_linux_nocgo.go SQLSetEnvUIntPtrAttr() - ENTRY")
+	trc.Trace1("api/api_purego.go SQLSetEnvUIntPtrAttr() - ENTRY")
 	trc.Trace1(fmt.Sprintf("attribute=%d, valuePtr=0x%x, stringLength=%d", attribute, valuePtr, stringLength))
 
 	if !ensureLoaded() {
@@ -195,12 +195,12 @@ func SQLSetEnvUIntPtrAttr(environmentHandle SQLHENV, attribute SQLINTEGER, value
 	r := fnSQLSetEnvAttr(uintptr(environmentHandle), int32(attribute), valuePtr, int32(stringLength))
 
 	trc.Trace1(fmt.Sprintf("r = %d", int16(r)))
-	trc.Trace1("api/api_linux_nocgo.go SQLSetEnvUIntPtrAttr() - EXIT")
+	trc.Trace1("api/api_purego.go SQLSetEnvUIntPtrAttr() - EXIT")
 	return SQLRETURN(int16(r))
 }
 
 func SQLSetConnectUIntPtrAttr(connectionHandle SQLHDBC, attribute SQLINTEGER, valuePtr uintptr, stringLength SQLINTEGER) (ret SQLRETURN) {
-	trc.Trace1("api/api_linux_nocgo.go SQLSetConnectUIntPtrAttr() - ENTRY")
+	trc.Trace1("api/api_purego.go SQLSetConnectUIntPtrAttr() - ENTRY")
 	trc.Trace1(fmt.Sprintf("attribute=%d, valuePtr=%x, stringLength=%d", attribute, valuePtr, stringLength))
 
 	if !ensureLoaded() {
@@ -209,6 +209,6 @@ func SQLSetConnectUIntPtrAttr(connectionHandle SQLHDBC, attribute SQLINTEGER, va
 	r := fnSQLSetConnectAttrW(uintptr(connectionHandle), int32(attribute), valuePtr, int32(stringLength))
 
 	trc.Trace1(fmt.Sprintf("r = %d", int16(r)))
-	trc.Trace1("api/api_linux_nocgo.go SQLSetConnectUIntPtrAttr() - EXIT")
+	trc.Trace1("api/api_purego.go SQLSetConnectUIntPtrAttr() - EXIT")
 	return SQLRETURN(int16(r))
 }

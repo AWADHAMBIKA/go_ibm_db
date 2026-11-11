@@ -147,7 +147,7 @@ func TestInstallFrom(t *testing.T) {
 	srv, client := tlsServer(t, archive)
 	dest := filepath.Join(t.TempDir(), ".ibm_db", "clidriver")
 
-	err := installFrom(context.Background(), client, downloadSource{urls: []string{srv.URL}, sha256: sum(archive)}, dest)
+	err := installFrom(context.Background(), client, downloadSource{urls: []string{srv.URL}, sha256: sum(archive)}, dest, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +159,7 @@ func TestInstallFrom(t *testing.T) {
 		t.Fatalf("temporary files left behind: %v", leftovers)
 	}
 
-	err = installFrom(context.Background(), client, downloadSource{urls: []string{srv.URL}, sha256: strings.Repeat("1", 64)}, filepath.Join(t.TempDir(), "x"))
+	err = installFrom(context.Background(), client, downloadSource{urls: []string{srv.URL}, sha256: strings.Repeat("1", 64)}, filepath.Join(t.TempDir(), "x"), false)
 	if err == nil {
 		t.Fatal("expected checksum failure")
 	}
@@ -224,19 +224,56 @@ func TestEnsureHonoursAutoDownloadOff(t *testing.T) {
 func TestResolveSourceRules(t *testing.T) {
 	t.Setenv(EnvDownloadURL, "http://example.com/a.tar.gz")
 	t.Setenv(EnvDownloadSHA256, strings.Repeat("a", 64))
-	if _, err := resolveSource("linuxx64_odbc_cli.tar.gz"); err == nil {
+	if _, err := resolveSourceFor("linux", "amd64", "linuxx64_odbc_cli.tar.gz"); err == nil {
 		t.Fatal("http URL must be rejected")
 	}
 
 	t.Setenv(EnvDownloadURL, "https://example.com/a.tar.gz")
 	t.Setenv(EnvDownloadSHA256, "")
-	if _, err := resolveSource("linuxx64_odbc_cli.tar.gz"); err != nil {
+	if _, err := resolveSourceFor("linux", "amd64", "linuxx64_odbc_cli.tar.gz"); err != nil {
 		t.Fatalf("checksum is optional: %v", err)
 	}
 
 	t.Setenv(EnvDownloadSHA256, strings.Repeat("a", 64))
-	if _, err := resolveSource("linuxx64_odbc_cli.tar.gz"); err != nil {
+	if _, err := resolveSourceFor("linux", "amd64", "linuxx64_odbc_cli.tar.gz"); err != nil {
 		t.Fatalf("custom URL with checksum should be accepted: %v", err)
+	}
+}
+
+func TestForceDownloadFlag(t *testing.T) {
+	t.Setenv(EnvForceDownload, "true")
+	if !ForceDownload() {
+		t.Fatal("DOWNLOAD_CLIDRIVER=true should force a download")
+	}
+	t.Setenv(EnvForceDownload, "0")
+	if ForceDownload() {
+		t.Fatal("DOWNLOAD_CLIDRIVER=0 should not force a download")
+	}
+}
+
+func TestEnsureIgnoresForceDownload(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv(EnvLegacyHome, "")
+	t.Setenv(EnvAutoDownload, "")
+	// Any download attempt would fail: plain HTTP is rejected.
+	t.Setenv(EnvDownloadURL, "http://127.0.0.1:1/archive")
+	t.Setenv(EnvForceDownload, "true")
+
+	existing := t.TempDir()
+	os.MkdirAll(filepath.Dir(LibPath(existing)), 0o755)
+	if err := os.WriteFile(LibPath(existing), []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(EnvHome, existing)
+
+	r, err := Ensure(context.Background())
+	if err != nil || r.Home != existing {
+		t.Fatalf("DOWNLOAD_CLIDRIVER must not affect the runtime loader: %+v, %v", r, err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".ibm_db")); err == nil {
+		t.Fatal("nothing should be written to the default directory")
 	}
 }
 
@@ -268,6 +305,51 @@ func TestArchiveNameWindows(t *testing.T) {
 	}
 	if _, err := ArchiveName("windows", "arm64"); err == nil {
 		t.Error("windows/arm64 should error")
+	}
+}
+
+func TestArchiveNameDarwin(t *testing.T) {
+	for arch, want := range map[string]string{
+		"amd64": "macos64_odbc_cli.tar.gz",
+		"arm64": "macarm64_odbc_cli.tar.gz",
+	} {
+		got, err := ArchiveName("darwin", arch)
+		if err != nil || got != want {
+			t.Errorf("darwin/%s: got %q, %v; want %q", arch, got, err, want)
+		}
+	}
+	if _, err := ArchiveName("darwin", "386"); err == nil {
+		t.Fatal("expected unsupported architecture error")
+	}
+}
+
+func TestDarwinDownloadChecksums(t *testing.T) {
+	t.Setenv(EnvDownloadURL, "")
+	t.Setenv(EnvLegacyURL, "")
+	t.Setenv(EnvDownloadVersion, "")
+	t.Setenv(EnvDownloadSHA256, "")
+	for arch, version := range map[string]string{"amd64": "v11.5.9", "arm64": "v12.1.4"} {
+		archive, err := ArchiveName("darwin", arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		src, err := resolveSourceFor("darwin", arch, archive)
+		if err != nil || len(src.sha256) != 64 || !strings.Contains(src.urls[0], "/"+version+"/") {
+			t.Fatalf("darwin/%s: unexpected source %+v, %v", arch, src, err)
+		}
+	}
+	t.Setenv(EnvDownloadVersion, "v12.1.2")
+	if _, err := resolveSourceFor("darwin", "arm64", "archive"); err == nil {
+		t.Fatal("expected checksum requirement for an unpinned version")
+	}
+	t.Setenv(EnvDownloadSHA256, strings.Repeat("a", 64))
+	if _, err := resolveSourceFor("darwin", "arm64", "archive"); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(EnvDownloadSHA256, "")
+	t.Setenv(EnvDownloadURL, "https://example.com/archive")
+	if _, err := resolveSourceFor("darwin", "arm64", "archive"); err == nil {
+		t.Fatal("expected checksum requirement for a custom URL")
 	}
 }
 
@@ -317,10 +399,50 @@ func TestInstallFromZip(t *testing.T) {
 	})
 	srv, client := tlsServer(t, archive)
 	dest := filepath.Join(t.TempDir(), ".ibm_db", "clidriver")
-	if err := installFrom(context.Background(), client, downloadSource{urls: []string{srv.URL}, sha256: sum(archive)}, dest); err != nil {
+	if err := installFrom(context.Background(), client, downloadSource{urls: []string{srv.URL}, sha256: sum(archive)}, dest, false); err != nil {
 		t.Fatal(err)
 	}
 	if !Valid(dest) {
 		t.Fatal("installed directory is not a valid CLI driver")
+	}
+}
+
+func TestInstallFromReplace(t *testing.T) {
+	archive := makeTarGz(t, []entry{
+		{name: "clidriver/", typ: tar.TypeDir},
+		{name: "clidriver/lib/" + LibName(), body: "new"},
+		{name: "clidriver/bin/" + LibName(), body: "new"},
+	})
+	srv, client := tlsServer(t, archive)
+	dest := filepath.Join(t.TempDir(), ".ibm_db", "clidriver")
+	os.MkdirAll(filepath.Dir(LibPath(dest)), 0o755)
+	if err := os.WriteFile(LibPath(dest), []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	bad := downloadSource{urls: []string{srv.URL}, sha256: strings.Repeat("1", 64)}
+	if err := installFrom(context.Background(), client, bad, dest, true); err == nil {
+		t.Fatal("expected checksum failure")
+	}
+	if got, _ := os.ReadFile(LibPath(dest)); string(got) != "old" {
+		t.Fatalf("failed download must keep the existing install, got %q", got)
+	}
+
+	good := downloadSource{urls: []string{srv.URL}, sha256: sum(archive)}
+	if err := installFrom(context.Background(), client, good, dest, false); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(LibPath(dest)); string(got) != "old" {
+		t.Fatalf("non-replace install must keep a valid install, got %q", got)
+	}
+	if err := installFrom(context.Background(), client, good, dest, true); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(LibPath(dest)); string(got) != "new" {
+		t.Fatalf("replace install should install the new copy, got %q", got)
+	}
+	leftovers, _ := filepath.Glob(filepath.Join(filepath.Dir(dest), ".clidriver-install-*"))
+	if len(leftovers) != 0 {
+		t.Fatalf("temporary files left behind: %v", leftovers)
 	}
 }
