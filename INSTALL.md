@@ -198,6 +198,3 @@ On Windows the driver loads the Db2 CLI DLL (`db2cli64.dll`, or `db2cli.dll` on 
 
 `installer\setenvwin.bat [path-to-clidriver]` sets `IBM_DB_HOME` and adds its `bin` folder to `PATH` for the current prompt, for example to run `db2cli.exe`. It is not needed to build or run go_ibm_db.
 
-
-4. Download platform specific clidriver from https://public.dhe.ibm.com/ibmdl/export/pub/software/data/db2/drivers/odbc_cli/ , untar/unzip it and set `IBM_DB_HOME` environmental variable to full path of extracted 'clidriver' directory, for example if clidriver is extracted as: `/home/mysystem/clidriver`, then set system level environment variable `IBM_DB_HOME=/home/mysystem/clidriver`.
-
