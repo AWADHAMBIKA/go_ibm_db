@@ -8,7 +8,7 @@ Interface for GoLang to `DB2 for z/OS`, `DB2 for LUW` and `DB2 for i` database s
 
 ## Prerequisite
 
-- Golang should be installed (Go 1.22.1 or newer is recommended for the core driver; the optional Bun ORM integration requires Go 1.24 or newer)
+- **Go**: Go 1.22.1 or newer is recommended for the core driver; the optional Bun ORM integration requires Go 1.24 or newer. Latest version tested: **1.27.1**.
 
 - Git should be installed in your system.
 
